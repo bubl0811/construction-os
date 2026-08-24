@@ -20,6 +20,12 @@ class ProjectRole(str, enum.Enum):
     VIEWER = "viewer"
 
 
+class CompanyRole(str, enum.Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+
+
 class ProjectOwnedMixin:
     project_id: Mapped[UUID] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False
@@ -33,10 +39,16 @@ class Company(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "users"
+    company_id: Mapped[UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="RESTRICT"), index=True, nullable=False
+    )
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    company_role: Mapped[CompanyRole] = mapped_column(
+        Enum(CompanyRole, name="company_role"), default=CompanyRole.MEMBER, nullable=False
+    )
 
 
 class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin):
