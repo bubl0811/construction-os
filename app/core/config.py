@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     environment: Literal["local", "test", "staging", "production"] = "local"
     secret_key: str = Field(min_length=32)
+    access_token_expire_minutes: int = Field(default=60, gt=0)
+    jwt_algorithm: str = "HS256"
     database_url: str
     redis_url: str
     log_level: str = "INFO"
