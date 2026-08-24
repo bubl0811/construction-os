@@ -57,9 +57,7 @@ async def list_projects(session: SessionDep, current_user: CurrentUser) -> list[
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(
-    project_id: UUID, session: SessionDep, current_user: CurrentUser
-) -> Project:
+async def get_project(project_id: UUID, session: SessionDep, current_user: CurrentUser) -> Project:
     project = await get_accessible_project(session, current_user, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")

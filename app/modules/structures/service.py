@@ -18,12 +18,13 @@ def project_structures_query(project_id: UUID) -> Select[tuple[Structure]]:
 async def get_project_structure(
     session: AsyncSession, project_id: UUID, structure_id: UUID
 ) -> Structure | None:
-    return await session.scalar(
+    result = await session.scalars(
         select(Structure).where(
             Structure.id == structure_id,
             Structure.project_id == project_id,
         )
     )
+    return result.one_or_none()
 
 
 async def validate_parent(

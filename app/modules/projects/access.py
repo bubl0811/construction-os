@@ -21,9 +21,7 @@ ROLE_PERMISSIONS: dict[ProjectRole, frozenset[ProjectPermission]] = {
     ProjectRole.PROJECT_MANAGER: frozenset(
         {ProjectPermission.READ, ProjectPermission.MANAGE_STRUCTURES}
     ),
-    ProjectRole.ENGINEER: frozenset(
-        {ProjectPermission.READ, ProjectPermission.MANAGE_STRUCTURES}
-    ),
+    ProjectRole.ENGINEER: frozenset({ProjectPermission.READ, ProjectPermission.MANAGE_STRUCTURES}),
     ProjectRole.FOREMAN: frozenset({ProjectPermission.READ}),
     ProjectRole.PROCUREMENT: frozenset({ProjectPermission.READ}),
     ProjectRole.ACCOUNTANT: frozenset({ProjectPermission.READ}),

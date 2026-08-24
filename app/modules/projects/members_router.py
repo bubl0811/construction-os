@@ -38,7 +38,8 @@ async def _get_member(
     ).one_or_none()
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    return row
+    member, user = row
+    return member, user
 
 
 def _require_owner_for_owner_change(actor_role: ProjectRole, target_role: ProjectRole) -> None:

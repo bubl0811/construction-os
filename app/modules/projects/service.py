@@ -18,4 +18,5 @@ def accessible_projects_query(user: User) -> Select[tuple[Project]]:
 async def get_accessible_project(
     session: AsyncSession, user: User, project_id: UUID
 ) -> Project | None:
-    return await session.scalar(accessible_projects_query(user).where(Project.id == project_id))
+    result = await session.scalars(accessible_projects_query(user).where(Project.id == project_id))
+    return result.one_or_none()

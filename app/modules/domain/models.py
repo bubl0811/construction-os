@@ -1,4 +1,4 @@
-import enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
-class ProjectRole(str, enum.Enum):
+class ProjectRole(StrEnum):
     OWNER = "owner"
     ADMIN = "admin"
     PROJECT_MANAGER = "project_manager"
@@ -20,7 +20,7 @@ class ProjectRole(str, enum.Enum):
     VIEWER = "viewer"
 
 
-class CompanyRole(str, enum.Enum):
+class CompanyRole(StrEnum):
     OWNER = "owner"
     ADMIN = "admin"
     MEMBER = "member"
