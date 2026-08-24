@@ -16,3 +16,7 @@ def test_project_owned_tables_have_project_id() -> None:
     exceptions = {"companies", "users", "projects"}
     for table_name in set(Base.metadata.tables) - exceptions:
         assert "project_id" in Base.metadata.tables[table_name].columns
+
+
+def test_user_has_company_tenant_boundary() -> None:
+    assert "company_id" in Base.metadata.tables["users"].columns
