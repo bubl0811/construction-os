@@ -29,6 +29,20 @@ docker compose up
 Authentication starts with `POST /api/v1/auth/register`. It atomically creates a
 company and its owner. Use the returned bearer token for the project endpoints.
 
+## Implemented API
+
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/token`, `GET /api/v1/auth/me`
+- `POST /api/v1/projects`, `GET /api/v1/projects`, `GET /api/v1/projects/{project_id}`
+- list, add, change, and remove project members under
+  `/api/v1/projects/{project_id}/members`
+- create, list, read, update, and delete construction structures under
+  `/api/v1/projects/{project_id}/structures`
+
+Project access always requires both a matching `company_id` and a `ProjectMember`
+record. Owners and administrators manage members. Owners, administrators, project
+managers, and engineers manage structures; all project roles can read them. Owner
+changes are owner-only, and the last project owner cannot be removed or downgraded.
+
 ## Architecture
 
 `Project` is the aggregate anchor. Project-owned records carry `project_id`, while
