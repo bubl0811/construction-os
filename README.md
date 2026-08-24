@@ -19,6 +19,16 @@ docker compose up --build
 
 API health check: `GET http://localhost:8000/api/v1/health`
 
+Apply the database schema and start the API:
+
+```bash
+docker compose run --rm api alembic upgrade head
+docker compose up
+```
+
+Authentication starts with `POST /api/v1/auth/register`. It atomically creates a
+company and its owner. Use the returned bearer token for the project endpoints.
+
 ## Architecture
 
 `Project` is the aggregate anchor. Project-owned records carry `project_id`, while
