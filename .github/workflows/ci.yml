@@ -19,3 +19,11 @@ jobs:
       - run: ruff format --check .
       - run: mypy app
       - run: pytest
+      - name: Validate staging deployment files
+        run: |
+          bash -n scripts/deploy.sh
+          cp .env.example .env
+          CONSTRUCTION_OS_POSTGRES_DB=construction \
+          CONSTRUCTION_OS_POSTGRES_USER=construction \
+          CONSTRUCTION_OS_POSTGRES_PASSWORD=validation-only \
+            docker compose -f compose.staging.yaml config >/dev/null

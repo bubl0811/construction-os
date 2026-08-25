@@ -43,6 +43,19 @@ record. Owners and administrators manage members. Owners, administrators, projec
 managers, and engineers manage structures; all project roles can read them. Owner
 changes are owner-only, and the last project owner cannot be removed or downgraded.
 
+## Server staging deployment
+
+Staging uses `compose.staging.yaml` and stores generated secrets only in
+`/opt/construction-os/.env` on the server. The `Deploy staging` GitHub Actions
+workflow uploads the selected commit, applies Alembic migrations, starts PostgreSQL,
+Redis, and the API, and verifies the API health endpoint.
+
+The workflow requires the repository secret `CONSTRUCTION_OS_SERVER_PASSWORD`.
+Start it manually from **Actions → Deploy staging → Run workflow**. The API and
+interactive documentation are then available on port `8000`; database and Redis
+ports are not exposed publicly. A domain, reverse proxy, and TLS are required before
+this staging installation is promoted to production.
+
 ## Architecture
 
 `Project` is the aggregate anchor. Project-owned records carry `project_id`, while
