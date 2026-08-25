@@ -44,15 +44,18 @@ jobs:
         run: |
           mkdir -p "${HOME}/.ssh"
           chmod 700 "${HOME}/.ssh"
-          ssh-keyscan -H "${SERVER_HOST}" >> "${HOME}/.ssh/known_hosts"
-          sshpass -e ssh "${SERVER_USER}@${SERVER_HOST}" \
+          SSH_OPTIONS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
+          sshpass -e ssh ${SSH_OPTIONS} "${SERVER_USER}@${SERVER_HOST}" \
             "install -d -m 755 /opt/construction-os"
-          sshpass -e scp /tmp/construction-os.tar.gz \
+          sshpass -e scp ${SSH_OPTIONS} /tmp/construction-os.tar.gz \
             "${SERVER_USER}@${SERVER_HOST}:/tmp/construction-os.tar.gz"
-          sshpass -e ssh "${SERVER_USER}@${SERVER_HOST}" \
+          sshpass -e ssh ${SSH_OPTIONS} "${SERVER_USER}@${SERVER_HOST}" \
             "tar -xzf /tmp/construction-os.tar.gz -C /opt/construction-os && rm /tmp/construction-os.tar.gz"
 
       - name: Deploy and verify
         run: |
-          sshpass -e ssh "${SERVER_USER}@${SERVER_HOST}" \
+          sshpass -e ssh \
+            -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=15 \
+            "${SERVER_USER}@${SERVER_HOST}" \
             "chmod 755 /opt/construction-os/scripts/deploy.sh && /opt/construction-os/scripts/deploy.sh"
