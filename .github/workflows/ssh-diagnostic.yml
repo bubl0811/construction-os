@@ -1,0 +1,38 @@
+name: SSH connectivity diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/ssh-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe common SSH ports
+        shell: bash
+        run: |
+          set -u
+          host="185.143.145.25"
+          open_port=""
+          for port in 22 2222 2200 2022 22222; do
+            echo "Testing ${host}:${port}"
+            if timeout 8 bash -c "exec 3<>/dev/tcp/${host}/${port}" 2>/dev/null; then
+              echo "OPEN ${port}"
+              open_port="${port}"
+              break
+            else
+              echo "CLOSED_OR_FILTERED ${port}"
+            fi
+          done
+          if [ -z "${open_port}" ]; then
+            echo "No reachable SSH port found."
+            exit 1
+          fi
