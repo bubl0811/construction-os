@@ -5,19 +5,55 @@ set -Eeuo pipefail
 readonly APP_DIR="${CONSTRUCTION_OS_DEPLOY_DIR:-/opt/construction-os}"
 readonly COMPOSE_FILE="compose.staging.yaml"
 
-cd "${APP_DIR}"
+ensure_server_dependencies() {
+  if command -v docker >/dev/null 2>&1 \
+    && docker compose version >/dev/null 2>&1 \
+    && command -v openssl >/dev/null 2>&1; then
+    systemctl enable --now docker
+    return
+  fi
 
-for required_command in docker openssl; do
-  if ! command -v "${required_command}" >/dev/null 2>&1; then
-    echo "Required command is not installed: ${required_command}" >&2
+  if [[ "$(id -u)" -ne 0 ]] || ! command -v apt-get >/dev/null 2>&1; then
+    echo "Automatic dependency installation requires root on Debian or Ubuntu." >&2
     exit 1
   fi
-done
 
-if ! docker compose version >/dev/null 2>&1; then
-  echo "Docker Compose v2 is required." >&2
-  exit 1
-fi
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install --yes ca-certificates curl openssl
+
+  if ! command -v docker >/dev/null 2>&1 \
+    || ! docker compose version >/dev/null 2>&1; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    case "${ID:-}" in
+      debian | ubuntu) ;;
+      *)
+        echo "Automatic Docker installation supports Debian and Ubuntu only." >&2
+        exit 1
+        ;;
+    esac
+
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL "https://download.docker.com/linux/${ID}/gpg" \
+      -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
+      >/etc/apt/sources.list.d/docker.list
+    apt-get update
+    apt-get install --yes \
+      docker-ce \
+      docker-ce-cli \
+      containerd.io \
+      docker-buildx-plugin \
+      docker-compose-plugin
+  fi
+
+  systemctl enable --now docker
+}
+
+ensure_server_dependencies
+cd "${APP_DIR}"
 
 if [[ ! -f .env ]]; then
   umask 077
