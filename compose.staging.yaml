@@ -6,6 +6,8 @@ services:
     env_file: .env
     expose:
       - "8000"
+    volumes:
+      - document_data:/var/lib/construction-os/documents
     depends_on:
       db:
         condition: service_healthy
@@ -71,3 +73,4 @@ volumes:
   redis_data:
   caddy_data:
   caddy_config:
+  document_data:

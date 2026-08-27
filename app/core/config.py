@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -20,6 +21,8 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str
     log_level: str = "INFO"
+    document_storage_path: Path = Path("/var/lib/construction-os/documents")
+    max_document_size_mb: int = Field(default=20, ge=1, le=200)
 
 
 @lru_cache

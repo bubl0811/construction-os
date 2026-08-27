@@ -13,16 +13,27 @@ class ProjectPermission(StrEnum):
     READ = "read"
     MANAGE_MEMBERS = "manage_members"
     MANAGE_STRUCTURES = "manage_structures"
+    MANAGE_DOCUMENTS = "manage_documents"
 
 
 ROLE_PERMISSIONS: dict[ProjectRole, frozenset[ProjectPermission]] = {
     ProjectRole.OWNER: frozenset(ProjectPermission),
     ProjectRole.ADMIN: frozenset(ProjectPermission),
     ProjectRole.PROJECT_MANAGER: frozenset(
-        {ProjectPermission.READ, ProjectPermission.MANAGE_STRUCTURES}
+        {
+            ProjectPermission.READ,
+            ProjectPermission.MANAGE_STRUCTURES,
+            ProjectPermission.MANAGE_DOCUMENTS,
+        }
     ),
-    ProjectRole.ENGINEER: frozenset({ProjectPermission.READ, ProjectPermission.MANAGE_STRUCTURES}),
-    ProjectRole.FOREMAN: frozenset({ProjectPermission.READ}),
+    ProjectRole.ENGINEER: frozenset(
+        {
+            ProjectPermission.READ,
+            ProjectPermission.MANAGE_STRUCTURES,
+            ProjectPermission.MANAGE_DOCUMENTS,
+        }
+    ),
+    ProjectRole.FOREMAN: frozenset({ProjectPermission.READ, ProjectPermission.MANAGE_DOCUMENTS}),
     ProjectRole.PROCUREMENT: frozenset({ProjectPermission.READ}),
     ProjectRole.ACCOUNTANT: frozenset({ProjectPermission.READ}),
     ProjectRole.VIEWER: frozenset({ProjectPermission.READ}),
