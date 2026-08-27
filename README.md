@@ -52,9 +52,11 @@ Redis, and the API, and verifies the API health endpoint.
 
 The workflow requires the repository secret `CONSTRUCTION_OS_SERVER_PASSWORD`.
 Start it manually from **Actions → Deploy staging → Run workflow**. The API and
-interactive documentation are then available on port `8000`; database and Redis
-ports are not exposed publicly. A domain, reverse proxy, and TLS are required before
-this staging installation is promoted to production.
+interactive documentation are then available through
+`https://185-143-145-25.sslip.io/docs`. Caddy terminates TLS and proxies requests
+to the API; the API, database, and Redis container ports are not exposed publicly.
+A dedicated domain is still recommended before this staging installation is
+promoted to production.
 
 ## Architecture
 

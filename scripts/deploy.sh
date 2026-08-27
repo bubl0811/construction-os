@@ -4,6 +4,7 @@ set -Eeuo pipefail
 
 readonly APP_DIR="${CONSTRUCTION_OS_DEPLOY_DIR:-/opt/construction-os}"
 readonly COMPOSE_FILE="compose.staging.yaml"
+readonly PUBLIC_HEALTH_URL="https://185-143-145-25.sslip.io/api/v1/health"
 
 ensure_server_dependencies() {
   if command -v docker >/dev/null 2>&1 \
@@ -83,18 +84,34 @@ docker compose -f "${COMPOSE_FILE}" up -d db redis
 docker compose -f "${COMPOSE_FILE}" run --rm api alembic upgrade head
 docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans
 
+api_is_healthy=false
 for _ in $(seq 1 18); do
   if docker compose -f "${COMPOSE_FILE}" exec -T api \
     python -c \
     "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"; then
+    api_is_healthy=true
+    break
+  fi
+  sleep 5
+done
+
+if [[ "${api_is_healthy}" != true ]]; then
+  docker compose -f "${COMPOSE_FILE}" ps
+  docker compose -f "${COMPOSE_FILE}" logs --tail=100 api
+  echo "Construction OS API did not become healthy in time." >&2
+  exit 1
+fi
+
+for _ in $(seq 1 24); do
+  if curl --fail --silent --show-error --max-time 10 "${PUBLIC_HEALTH_URL}" >/dev/null; then
     docker compose -f "${COMPOSE_FILE}" ps
-    echo "Construction OS deployment is healthy."
+    echo "Construction OS deployment is healthy at ${PUBLIC_HEALTH_URL}."
     exit 0
   fi
   sleep 5
 done
 
 docker compose -f "${COMPOSE_FILE}" ps
-docker compose -f "${COMPOSE_FILE}" logs --tail=100 api
-echo "Construction OS did not become healthy in time." >&2
+docker compose -f "${COMPOSE_FILE}" logs --tail=100 caddy
+echo "Construction OS HTTPS endpoint did not become healthy in time." >&2
 exit 1

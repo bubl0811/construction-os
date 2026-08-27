@@ -1,0 +1,4 @@
+185-143-145-25.sslip.io {
+	encode zstd gzip
+	reverse_proxy api:8000
+}
