@@ -94,11 +94,17 @@ class DocumentPage(Base, UUIDPrimaryKeyMixin, TimestampMixin, ProjectOwnedMixin)
 
 class Calculation(Base, UUIDPrimaryKeyMixin, TimestampMixin, ProjectOwnedMixin):
     __tablename__ = "calculations"
+    structure_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("structures.id", ondelete="SET NULL"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
     calculation_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False)
     formula_version: Mapped[str] = mapped_column(String(64), nullable=False)
     input_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
     created_by_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
 
 
