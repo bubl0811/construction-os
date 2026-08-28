@@ -2,10 +2,15 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
+import jwt
 import pytest
 from pypdf import PdfWriter
 from sqlalchemy.dialects import postgresql
 
+from app.core.security import (
+    create_document_upload_token,
+    decode_document_upload_token,
+)
 from app.main import app
 from app.modules.documents.service import (
     DocumentValidationError,
@@ -78,3 +83,15 @@ def test_document_routes_are_registered() -> None:
 
     assert {"get", "post"} <= set(paths[collection_path])
     assert "get" in paths[download_path]
+    assert "post" in paths[f"{collection_path}/upload-session"]
+    assert "post" in paths[f"{collection_path}/direct-upload"]
+
+
+def test_document_upload_token_is_project_scoped() -> None:
+    user_id = uuid4()
+    project_id = uuid4()
+    token = create_document_upload_token(user_id, project_id)
+
+    assert decode_document_upload_token(token, project_id) == user_id
+    with pytest.raises(jwt.InvalidTokenError):
+        decode_document_upload_token(token, uuid4())

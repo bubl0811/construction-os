@@ -66,6 +66,11 @@ CONSTRUCTION_OS_SECRET_KEY=${jwt_secret}
 CONSTRUCTION_OS_DATABASE_URL=postgresql+asyncpg://construction:${database_password}@db:5432/construction
 CONSTRUCTION_OS_REDIS_URL=redis://redis:6379/0
 CONSTRUCTION_OS_LOG_LEVEL=INFO
+CONSTRUCTION_OS_DOCUMENT_STORAGE_PATH=/var/lib/construction-os/documents
+CONSTRUCTION_OS_MAX_DOCUMENT_SIZE_MB=200
+CONSTRUCTION_OS_DOCUMENT_UPLOAD_TOKEN_EXPIRE_MINUTES=10
+CONSTRUCTION_OS_PUBLIC_API_URL=https://185-143-145-25.sslip.io/api/v1
+CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://construction-os-dashboard.hlpumg.chatgpt.site
 CONSTRUCTION_OS_POSTGRES_DB=construction
 CONSTRUCTION_OS_POSTGRES_USER=construction
 CONSTRUCTION_OS_POSTGRES_PASSWORD=${database_password}
@@ -75,6 +80,26 @@ EOF
 elif ! grep -qx "CONSTRUCTION_OS_ENVIRONMENT=staging" .env; then
   echo "Existing .env is not a staging environment; deployment stopped." >&2
   exit 1
+fi
+
+if grep -q '^CONSTRUCTION_OS_MAX_DOCUMENT_SIZE_MB=' .env; then
+  sed -i 's/^CONSTRUCTION_OS_MAX_DOCUMENT_SIZE_MB=.*/CONSTRUCTION_OS_MAX_DOCUMENT_SIZE_MB=200/' .env
+else
+  echo 'CONSTRUCTION_OS_MAX_DOCUMENT_SIZE_MB=200' >>.env
+fi
+if ! grep -q '^CONSTRUCTION_OS_DOCUMENT_STORAGE_PATH=' .env; then
+  echo 'CONSTRUCTION_OS_DOCUMENT_STORAGE_PATH=/var/lib/construction-os/documents' >>.env
+fi
+if ! grep -q '^CONSTRUCTION_OS_DOCUMENT_UPLOAD_TOKEN_EXPIRE_MINUTES=' .env; then
+  echo 'CONSTRUCTION_OS_DOCUMENT_UPLOAD_TOKEN_EXPIRE_MINUTES=10' >>.env
+fi
+if ! grep -q '^CONSTRUCTION_OS_PUBLIC_API_URL=' .env; then
+  echo 'CONSTRUCTION_OS_PUBLIC_API_URL=https://185-143-145-25.sslip.io/api/v1' >>.env
+fi
+if grep -q '^CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=' .env; then
+  sed -i 's|^CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=.*|CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://construction-os-dashboard.hlpumg.chatgpt.site|' .env
+else
+  echo 'CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://construction-os-dashboard.hlpumg.chatgpt.site' >>.env
 fi
 
 chmod 600 .env
@@ -105,6 +130,12 @@ fi
 for _ in $(seq 1 24); do
   if curl --fail --silent --show-error --max-time 10 "${PUBLIC_HEALTH_URL}" >/dev/null; then
     docker compose -f "${COMPOSE_FILE}" ps
+    docker compose -f "${COMPOSE_FILE}" exec -T api sh -c '
+      set -- $(df -kP /var/lib/construction-os/documents | tail -n 1)
+      printf "Document storage: total=%sKB used=%sKB available=%sKB usage=%s\n" "$2" "$3" "$4" "$5"
+      du -sh /var/lib/construction-os/documents 2>/dev/null | awk "{print \"Stored documents: \" \$1}"
+    '
+    echo "Maximum PDF upload size: 200 MB."
     echo "Construction OS deployment is healthy at ${PUBLIC_HEALTH_URL}."
     exit 0
   fi

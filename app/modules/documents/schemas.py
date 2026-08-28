@@ -15,3 +15,10 @@ class DocumentResponse(BaseModel):
     page_count: int
     created_at: datetime
     updated_at: datetime
+
+
+class DocumentUploadSessionResponse(BaseModel):
+    upload_url: str
+    token: str
+    expires_in_seconds: int
+    max_size_mb: int

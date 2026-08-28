@@ -19,6 +19,11 @@ docker compose up --build
 
 API health check: `GET http://localhost:8000/api/v1/health`
 
+Project PDF documents are stored in a persistent Docker volume. The default
+per-file upload limit is 200 MB and can be changed with
+`CONSTRUCTION_OS_MAX_DOCUMENT_SIZE_MB` (the staging HTTPS proxy allows 210 MB
+to account for multipart overhead).
+
 Apply the database schema and start the API:
 
 ```bash

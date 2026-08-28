@@ -2,13 +2,16 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
 
+import jwt
 from anyio import to_thread
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import get_settings
+from app.core.security import create_document_upload_token, decode_document_upload_token
 from app.modules.auth.dependencies import CurrentUser, SessionDep
-from app.modules.documents.schemas import DocumentResponse
+from app.modules.documents.schemas import DocumentResponse, DocumentUploadSessionResponse
 from app.modules.documents.service import (
     DocumentValidationError,
     document_storage_file,
@@ -17,10 +20,11 @@ from app.modules.documents.service import (
     project_documents_query,
     safe_document_name,
 )
-from app.modules.domain.models import AuditEvent, Document, DocumentPage
+from app.modules.domain.models import AuditEvent, Document, DocumentPage, User
 from app.modules.projects.access import ProjectPermission, require_project_permission
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
+upload_token_scheme = HTTPBearer()
 
 
 def _response(document: Document, page_count: int) -> DocumentResponse:
@@ -36,16 +40,12 @@ def _response(document: Document, page_count: int) -> DocumentResponse:
     )
 
 
-@router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-async def upload_document(
+async def _store_document(
     project_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     file: Annotated[UploadFile, File()],
 ) -> DocumentResponse:
-    await require_project_permission(
-        session, current_user, project_id, ProjectPermission.MANAGE_DOCUMENTS
-    )
     settings = get_settings()
     document_id = uuid4()
     storage_key = f"{project_id}/{document_id}.pdf"
@@ -103,6 +103,65 @@ async def upload_document(
         raise
     await session.refresh(document)
     return _response(document, page_count)
+
+
+@router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    project_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    file: Annotated[UploadFile, File()],
+) -> DocumentResponse:
+    await require_project_permission(
+        session, current_user, project_id, ProjectPermission.MANAGE_DOCUMENTS
+    )
+    return await _store_document(project_id, session, current_user, file)
+
+
+@router.post("/upload-session", response_model=DocumentUploadSessionResponse)
+async def create_upload_session(
+    project_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DocumentUploadSessionResponse:
+    await require_project_permission(
+        session, current_user, project_id, ProjectPermission.MANAGE_DOCUMENTS
+    )
+    settings = get_settings()
+    return DocumentUploadSessionResponse(
+        upload_url=f"{settings.public_api_url.rstrip('/')}/projects/{project_id}/documents/direct-upload",
+        token=create_document_upload_token(current_user.id, project_id),
+        expires_in_seconds=settings.document_upload_token_expire_minutes * 60,
+        max_size_mb=settings.max_document_size_mb,
+    )
+
+
+@router.post(
+    "/direct-upload",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def direct_upload_document(
+    project_id: UUID,
+    session: SessionDep,
+    file: Annotated[UploadFile, File()],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(upload_token_scheme)],
+) -> DocumentResponse:
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired document upload token",
+    )
+    try:
+        user_id = decode_document_upload_token(credentials.credentials, project_id)
+    except (jwt.InvalidTokenError, ValueError):
+        raise unauthorized from None
+    current_user = await session.get(User, user_id)
+    if current_user is None or not current_user.is_active:
+        raise unauthorized
+    await require_project_permission(
+        session, current_user, project_id, ProjectPermission.MANAGE_DOCUMENTS
+    )
+    return await _store_document(project_id, session, current_user, file)
 
 
 @router.get("", response_model=list[DocumentResponse])
