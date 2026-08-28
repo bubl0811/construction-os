@@ -7,6 +7,7 @@ from sqlalchemy.dialects import postgresql
 from app.modules.calculations.schemas import CalculationType
 from app.modules.calculations.service import (
     calculate_concrete_pour,
+    calculate_project_rebar_schedule,
     calculate_wall_rebar,
     project_calculations_query,
 )
@@ -30,6 +31,21 @@ def test_concrete_pour_accounts_for_deductions_rebar_and_reserve() -> None:
     assert result["rebar_displacement_m3"] == 1.0
     assert result["net_volume_m3"] == 42.65
     assert result["order_volume_m3"] == 43.93
+
+
+def test_concrete_pour_can_use_verified_project_volume() -> None:
+    _, result = calculate_concrete_pour(
+        {
+            "length_m": 1,
+            "height_m": 1,
+            "thickness_m": 1,
+            "specified_gross_volume_m3": 508.51,
+            "reserve_percent": 0,
+        }
+    )
+    assert result["geometric_volume_m3"] == 1
+    assert result["gross_volume_m3"] == 508.51
+    assert result["volume_basis"] == "project_specification"
 
 
 def test_concrete_pour_rejects_deductions_larger_than_volume() -> None:
@@ -72,3 +88,20 @@ def test_project_calculations_query_is_project_scoped() -> None:
     assert str(project_id) in query
     assert "calculations.project_id" in query
     assert CalculationType.CONCRETE_POUR.value == "concrete_pour"
+
+
+def test_project_rebar_schedule_preserves_declared_specification_total() -> None:
+    _, result = calculate_project_rebar_schedule(
+        {
+            "element_mark": "Км-1",
+            "element_name": "Дві колони",
+            "items": [
+                {"mark": "1", "steel": "Ø25 A500C", "mass_kg": 3051.84},
+                {"mark": "Д2", "steel": "Ø12 A240C", "mass_kg": 445.44},
+                {"mark": "Ш3", "steel": "Ø12 A240C", "mass_kg": 333.84},
+            ],
+            "declared_total_mass_kg": 3831.12,
+        }
+    )
+    assert result["total_mass_kg"] == 3831.12
+    assert result["rounding_difference_kg"] == 0

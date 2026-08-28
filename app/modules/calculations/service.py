@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.calculations.schemas import (
     CalculationType,
     ConcretePourInput,
+    ProjectRebarScheduleInput,
     WallRebarInput,
 )
 from app.modules.domain.models import Calculation, Structure
@@ -17,6 +18,7 @@ from app.modules.domain.models import Calculation, Structure
 FORMULA_VERSIONS = {
     CalculationType.CONCRETE_POUR: "concrete-wall-v1",
     CalculationType.WALL_REBAR: "wall-rebar-v1",
+    CalculationType.PROJECT_REBAR_SCHEDULE: "project-rebar-schedule-v1",
 }
 STEEL_DENSITY_KG_M3 = 7850.0
 
@@ -32,7 +34,8 @@ def calculate_concrete_pour(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[s
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.errors()
         ) from error
-    gross_m3 = data.length_m * data.height_m * data.thickness_m
+    geometric_volume_m3 = data.length_m * data.height_m * data.thickness_m
+    gross_m3 = data.specified_gross_volume_m3 or geometric_volume_m3
     rebar_displacement_m3 = (
         data.rebar_mass_kg / STEEL_DENSITY_KG_M3 if data.subtract_rebar_displacement else 0
     )
@@ -45,8 +48,17 @@ def calculate_concrete_pour(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[s
     net_m3 = gross_m3 - deductions_m3
     order_m3 = net_m3 * (1 + data.reserve_percent / 100)
     normalized = data.model_dump(mode="json")
+    formula = (
+        "Vзамовлення = (Vпроєктне − Vпрорізів − Vзакладних − Vарматури) × (1 + запас/100)"
+        if data.specified_gross_volume_m3
+        else "Vзамовлення = (L × H × t − Vпрорізів − Vзакладних − Vарматури) × (1 + запас/100)"
+    )
     result = {
         "gross_volume_m3": _round(gross_m3),
+        "geometric_volume_m3": _round(geometric_volume_m3),
+        "volume_basis": (
+            "project_specification" if data.specified_gross_volume_m3 else "rectangular_geometry"
+        ),
         "openings_m3": _round(data.openings_m3),
         "embedded_items_m3": _round(data.embedded_items_m3),
         "rebar_displacement_m3": _round(rebar_displacement_m3),
@@ -54,8 +66,33 @@ def calculate_concrete_pour(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[s
         "reserve_volume_m3": _round(order_m3 - net_m3),
         "order_volume_m3": _round(order_m3),
         "concrete_class": data.concrete_class,
+        "formula": formula,
+    }
+    return normalized, result
+
+
+def calculate_project_rebar_schedule(
+    raw: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    try:
+        data = ProjectRebarScheduleInput.model_validate(raw)
+    except ValidationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.errors()
+        ) from error
+    calculated_mass_kg = sum(item.mass_kg for item in data.items)
+    difference_kg = calculated_mass_kg - data.declared_total_mass_kg
+    normalized = data.model_dump(mode="json")
+    result = {
+        "element_mark": data.element_mark,
+        "item_count": len(data.items),
+        "calculated_items_mass_kg": _round(calculated_mass_kg, 2),
+        "declared_total_mass_kg": _round(data.declared_total_mass_kg, 2),
+        "rounding_difference_kg": _round(difference_kg, 2),
+        "total_mass_kg": _round(data.declared_total_mass_kg, 2),
         "formula": (
-            "Vзамовлення = (L × H × t − Vпрорізів − Vзакладних − Vарматури) × (1 + запас/100)"
+            "Проєктна маса за специфікацією та відомістю витрат сталі; "
+            "позиції не перераховуються приблизною сіткою"
         ),
     }
     return normalized, result
@@ -130,8 +167,10 @@ def calculate(
 ) -> tuple[str, dict[str, Any], dict[str, Any]]:
     if calculation_type == CalculationType.CONCRETE_POUR:
         input_data, result = calculate_concrete_pour(raw)
-    else:
+    elif calculation_type == CalculationType.WALL_REBAR:
         input_data, result = calculate_wall_rebar(raw)
+    else:
+        input_data, result = calculate_project_rebar_schedule(raw)
     return FORMULA_VERSIONS[calculation_type], input_data, result
 
 
