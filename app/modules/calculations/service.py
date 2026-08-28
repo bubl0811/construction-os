@@ -55,8 +55,7 @@ def calculate_concrete_pour(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[s
         "order_volume_m3": _round(order_m3),
         "concrete_class": data.concrete_class,
         "formula": (
-            "Vзамовлення = (L × H × t − Vпрорізів − Vзакладних − Vарматури) "
-            "× (1 + запас/100)"
+            "Vзамовлення = (L × H × t − Vпрорізів − Vзакладних − Vарматури) × (1 + запас/100)"
         ),
     }
     return normalized, result
@@ -91,8 +90,10 @@ def calculate_wall_rebar(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[str,
     base_mass_kg = vertical_mass_kg + horizontal_mass_kg + data.extra_details_mass_kg
     total_mass_kg = base_mass_kg * (1 + data.waste_percent / 100)
     tie_wire_kg = total_mass_kg * data.tie_wire_percent / 100
-    intersections = vertical_count_per_layer * horizontal_count_per_layer * min(
-        data.vertical_layers, data.horizontal_layers
+    intersections = (
+        vertical_count_per_layer
+        * horizontal_count_per_layer
+        * min(data.vertical_layers, data.horizontal_layers)
     )
     normalized = data.model_dump(mode="json")
     result = {

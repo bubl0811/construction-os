@@ -26,9 +26,7 @@ def upgrade() -> None:
     if "title" not in columns:
         op.add_column(
             "calculations",
-            sa.Column(
-                "title", sa.String(length=255), nullable=False, server_default="Розрахунок"
-            ),
+            sa.Column("title", sa.String(length=255), nullable=False, server_default="Розрахунок"),
         )
         op.alter_column("calculations", "title", server_default=None)
     if "status" not in columns:
@@ -42,8 +40,7 @@ def upgrade() -> None:
 
     inspector = sa.inspect(bind)
     foreign_keys = {
-        foreign_key.get("name")
-        for foreign_key in inspector.get_foreign_keys("calculations")
+        foreign_key.get("name") for foreign_key in inspector.get_foreign_keys("calculations")
     }
     if "fk_calculations_structure_id_structures" not in foreign_keys:
         op.create_foreign_key(
