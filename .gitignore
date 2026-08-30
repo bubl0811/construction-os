@@ -5,6 +5,19 @@ __pycache__/
 .ruff_cache/
 .venv/
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+*.sql
+*.dump
+*.backup
+*.log
+coverage.xml
 .coverage
 htmlcov/
 dist/
@@ -12,3 +25,6 @@ build/
 *.egg-info/
 .idea/
 .vscode/
+documents/
+uploads/
+backups/
