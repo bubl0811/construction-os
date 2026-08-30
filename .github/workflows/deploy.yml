@@ -2,10 +2,6 @@ name: Deploy staging
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - .github/deploy-trigger
 
 concurrency:
   group: construction-os-staging
@@ -18,12 +14,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: production
     env:
       SERVER_HOST: 185.143.145.25
       SERVER_USER: root
       SSHPASS: ${{ secrets.CONSTRUCTION_OS_SERVER_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Validate deployment secret
         run: |
@@ -51,6 +50,7 @@ jobs:
             "${SERVER_USER}@${SERVER_HOST}:/tmp/construction-os.tar.gz"
           sshpass -e ssh ${SSH_OPTIONS} "${SERVER_USER}@${SERVER_HOST}" \
             "tar -xzf /tmp/construction-os.tar.gz -C /opt/construction-os && rm /tmp/construction-os.tar.gz"
+          rm -f /tmp/construction-os.tar.gz
 
       - name: Deploy and verify
         run: |
