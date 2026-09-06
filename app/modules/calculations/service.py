@@ -32,7 +32,8 @@ def calculate_concrete_pour(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[s
         data = ConcretePourInput.model_validate(raw)
     except ValidationError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.errors()
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error.errors(include_input=False, include_context=False),
         ) from error
     geometric_volume_m3 = data.length_m * data.height_m * data.thickness_m
     gross_m3 = data.specified_gross_volume_m3 or geometric_volume_m3
@@ -78,7 +79,8 @@ def calculate_project_rebar_schedule(
         data = ProjectRebarScheduleInput.model_validate(raw)
     except ValidationError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.errors()
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error.errors(include_input=False, include_context=False),
         ) from error
     calculated_mass_kg = sum(item.mass_kg for item in data.items)
     difference_kg = calculated_mass_kg - data.declared_total_mass_kg
@@ -107,7 +109,8 @@ def calculate_wall_rebar(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[str,
         data = WallRebarInput.model_validate(raw)
     except ValidationError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.errors()
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error.errors(include_input=False, include_context=False),
         ) from error
 
     vertical_count_per_layer = math.ceil(data.wall_length_m * 1000 / data.vertical_spacing_mm) + 1

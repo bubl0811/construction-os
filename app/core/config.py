@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     environment: Literal["local", "test", "staging", "production"] = "local"
     secret_key: str = Field(min_length=32)
     access_token_expire_minutes: int = Field(default=60, gt=0)
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: Literal["HS256"] = "HS256"
     database_url: str
     redis_url: str
     log_level: str = "INFO"
@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     max_document_size_mb: int = Field(default=200, ge=1, le=2048)
     document_upload_token_expire_minutes: int = Field(default=10, ge=1, le=60)
     public_api_url: str = "https://185-143-145-25.sslip.io/api/v1"
-    cors_allowed_origins: str = "https://construction-os-dashboard.hlpumg.chatgpt.site"
+    cors_allowed_origins: str = (
+        "https://buildos.top,https://www.buildos.top,"
+        "https://construction-os-dashboard.hlpumg.chatgpt.site"
+    )
 
 
 @lru_cache

@@ -14,7 +14,7 @@ from app.modules.calculations.service import (
     project_calculations_query,
     validate_structure,
 )
-from app.modules.domain.models import AuditEvent, Calculation
+from app.modules.domain.models import AuditEvent, Calculation, Document, DocumentPage
 from app.modules.projects.access import ProjectPermission, require_project_permission
 
 router = APIRouter(prefix="/projects/{project_id}/calculations", tags=["calculations"])
@@ -31,6 +31,26 @@ async def create_calculation(
         session, current_user, project_id, ProjectPermission.MANAGE_CALCULATIONS
     )
     await validate_structure(session, project_id, payload.structure_id)
+    for source in payload.sources:
+        if source.document_id is None:
+            continue
+        document = await session.scalar(
+            select(Document.id).where(
+                Document.id == source.document_id, Document.project_id == project_id
+            )
+        )
+        if document is None:
+            raise HTTPException(status_code=404, detail="Source document not found")
+        if source.page is not None:
+            page = await session.scalar(
+                select(DocumentPage.id).where(
+                    DocumentPage.document_id == source.document_id,
+                    DocumentPage.project_id == project_id,
+                    DocumentPage.page_number == source.page,
+                )
+            )
+            if page is None:
+                raise HTTPException(status_code=422, detail="Source page not found")
     formula_version, input_data, result = calculate(payload.calculation_type, payload.input_data)
     calculation = Calculation(
         project_id=project_id,
@@ -88,10 +108,12 @@ async def update_calculation_status(
     )
     calculation = (
         await session.scalars(
-            select(Calculation).where(
+            select(Calculation)
+            .where(
                 Calculation.id == calculation_id,
                 Calculation.project_id == project_id,
             )
+            .with_for_update()
         )
     ).one_or_none()
     if calculation is None:

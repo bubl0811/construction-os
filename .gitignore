@@ -25,6 +25,6 @@ build/
 *.egg-info/
 .idea/
 .vscode/
-documents/
+/documents/
 uploads/
 backups/
