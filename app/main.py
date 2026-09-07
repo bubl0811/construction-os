@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.http_security import SecurityMiddleware
 
 
 @asynccontextmanager
@@ -19,7 +20,9 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        docs_url="/docs" if settings.environment != "production" else None,
+        docs_url="/docs" if settings.environment in {"local", "test"} else None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.environment in {"local", "test"} else None,
         lifespan=lifespan,
     )
     allowed_origins = [
@@ -33,6 +36,7 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
         max_age=600,
     )
+    application.add_middleware(SecurityMiddleware)
     application.include_router(api_router, prefix=settings.api_prefix)
     return application
 

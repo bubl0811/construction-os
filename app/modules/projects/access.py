@@ -65,6 +65,13 @@ async def require_project_permission(
     project_id: UUID,
     permission: ProjectPermission = ProjectPermission.READ,
 ) -> ProjectAccess:
+    # Serialize membership changes before reading the actor's role and owner count.
+    if permission == ProjectPermission.MANAGE_MEMBERS:
+        await session.execute(
+            select(Project.id)
+            .where(Project.id == project_id, Project.company_id == user.company_id)
+            .with_for_update()
+        )
     row = (
         await session.execute(
             select(Project, ProjectMember)

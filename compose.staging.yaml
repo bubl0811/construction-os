@@ -4,6 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
     expose:
       - "8000"
     volumes:

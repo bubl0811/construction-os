@@ -1,10 +1,15 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.core.config import get_settings
 from app.modules.auth.dependencies import CurrentUser, SessionDep
-from app.modules.domain.models import AuditEvent, Project, ProjectMember, ProjectRole
+from app.modules.documents.service import document_storage_file
+from app.modules.domain.models import AuditEvent, Document, Project, ProjectMember, ProjectRole
+from app.modules.projects.access import ProjectPermission, require_project_permission
 from app.modules.projects.schemas import ProjectCreate, ProjectResponse
 from app.modules.projects.service import accessible_projects_query, get_accessible_project
 
@@ -62,3 +67,46 @@ async def get_project(project_id: UUID, session: SessionDep, current_user: Curre
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
+
+
+class ProjectDeleteRequest(BaseModel):
+    confirmation_code: str = Field(min_length=1, max_length=64)
+
+
+@router.get("/{project_id}/permissions")
+async def project_permissions(
+    project_id: UUID, session: SessionDep, current_user: CurrentUser
+) -> dict[str, bool]:
+    access = await require_project_permission(session, current_user, project_id)
+    return {"can_delete": access.membership.role == ProjectRole.OWNER}
+
+
+@router.delete("/{project_id}", status_code=204)
+async def delete_project(
+    project_id: UUID, payload: ProjectDeleteRequest, session: SessionDep, current_user: CurrentUser
+) -> Response:
+    access = await require_project_permission(
+        session, current_user, project_id, ProjectPermission.MANAGE_MEMBERS
+    )
+    if access.membership.role != ProjectRole.OWNER:
+        raise HTTPException(status_code=403, detail="Only the project owner can delete it")
+    if payload.confirmation_code != access.project.code:
+        raise HTTPException(status_code=422, detail="Project confirmation code does not match")
+    keys = list(
+        await session.scalars(select(Document.storage_key).where(Document.project_id == project_id))
+    )
+    root = get_settings().document_storage_path
+    # Validate paths before deleting anything. Never accept a client-supplied path.
+    files = [document_storage_file(root, key) for key in keys]
+    await session.delete(access.project)
+    await session.commit()
+    # Database cascades remove membership and all project-owned records.
+    # Orphan cleanup failures must not turn a committed deletion into a retry.
+    import logging
+
+    for file in files:
+        try:
+            file.unlink(missing_ok=True)
+        except OSError:
+            logging.getLogger(__name__).error("Deleted project has a file pending cleanup")
+    return Response(status_code=204)

@@ -35,6 +35,7 @@ def persist_pdf(
     temporary_path: Path,
     final_path: Path,
     max_size_bytes: int,
+    max_pages: int = 2000,
 ) -> tuple[str, int]:
     temporary_path.parent.mkdir(parents=True, exist_ok=True)
     source.seek(0)
@@ -63,11 +64,14 @@ def persist_pdf(
             if reader.is_encrypted:
                 raise DocumentValidationError("Password-protected PDFs are not supported")
             page_count = len(reader.pages)
-        except PdfReadError as error:
+        except (PdfReadError, ValueError, RecursionError, KeyError, TypeError) as error:
             raise DocumentValidationError("Uploaded PDF is damaged or unreadable") from error
 
         if page_count < 1:
             raise DocumentValidationError("PDF does not contain any pages")
+
+        if page_count > max_pages:
+            raise DocumentValidationError(f"PDF exceeds the {max_pages} page limit")
 
         os.replace(temporary_path, final_path)
         return digest.hexdigest(), page_count

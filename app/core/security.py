@@ -27,7 +27,12 @@ def create_access_token(user_id: UUID) -> str:
 
 def decode_access_token(token: str) -> UUID:
     settings = get_settings()
-    payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+    payload = jwt.decode(
+        token,
+        settings.secret_key,
+        algorithms=[settings.jwt_algorithm],
+        options={"require": ["exp", "sub", "type"]},
+    )
     if payload.get("type") != "access" or not isinstance(payload.get("sub"), str):
         raise jwt.InvalidTokenError("Invalid access token")
     return UUID(payload["sub"])
@@ -49,7 +54,12 @@ def create_document_upload_token(user_id: UUID, project_id: UUID) -> str:
 
 def decode_document_upload_token(token: str, project_id: UUID) -> UUID:
     settings = get_settings()
-    payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+    payload = jwt.decode(
+        token,
+        settings.secret_key,
+        algorithms=[settings.jwt_algorithm],
+        options={"require": ["exp", "sub", "type"]},
+    )
     if (
         payload.get("type") != "document_upload"
         or not isinstance(payload.get("sub"), str)

@@ -70,7 +70,7 @@ CONSTRUCTION_OS_DOCUMENT_STORAGE_PATH=/var/lib/construction-os/documents
 CONSTRUCTION_OS_MAX_DOCUMENT_SIZE_MB=200
 CONSTRUCTION_OS_DOCUMENT_UPLOAD_TOKEN_EXPIRE_MINUTES=10
 CONSTRUCTION_OS_PUBLIC_API_URL=https://185-143-145-25.sslip.io/api/v1
-CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://construction-os-dashboard.hlpumg.chatgpt.site
+CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://buildos.top,https://www.buildos.top,https://construction-os-dashboard.hlpumg.chatgpt.site
 CONSTRUCTION_OS_POSTGRES_DB=construction
 CONSTRUCTION_OS_POSTGRES_USER=construction
 CONSTRUCTION_OS_POSTGRES_PASSWORD=${database_password}
@@ -97,14 +97,18 @@ if ! grep -q '^CONSTRUCTION_OS_PUBLIC_API_URL=' .env; then
   echo 'CONSTRUCTION_OS_PUBLIC_API_URL=https://185-143-145-25.sslip.io/api/v1' >>.env
 fi
 if grep -q '^CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=' .env; then
-  sed -i 's|^CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=.*|CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://construction-os-dashboard.hlpumg.chatgpt.site|' .env
+  sed -i 's|^CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=.*|CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://buildos.top,https://www.buildos.top,https://construction-os-dashboard.hlpumg.chatgpt.site|' .env
 else
-  echo 'CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://construction-os-dashboard.hlpumg.chatgpt.site' >>.env
+  echo 'CONSTRUCTION_OS_CORS_ALLOWED_ORIGINS=https://buildos.top,https://www.buildos.top,https://construction-os-dashboard.hlpumg.chatgpt.site' >>.env
 fi
 
 chmod 600 .env
 
 docker compose -f "${COMPOSE_FILE}" build --pull api
+# Existing volumes were created by the former root process. Preserve files and
+# grant the new dedicated runtime user access before starting the new image.
+docker compose -f "${COMPOSE_FILE}" run --rm --no-deps --user 0:0 --cap-add CHOWN --cap-add DAC_OVERRIDE api \
+  chown -R 10001:10001 /var/lib/construction-os/documents
 docker compose -f "${COMPOSE_FILE}" up -d db redis
 docker compose -f "${COMPOSE_FILE}" run --rm api alembic upgrade head
 docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans

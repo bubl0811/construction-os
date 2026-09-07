@@ -1,20 +1,25 @@
 from typing import Annotated
 
+from anyio import to_thread
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import create_access_token, hash_password, verify_password
 from app.modules.auth.dependencies import CurrentUser, SessionDep
 from app.modules.auth.schemas import CurrentUserResponse, RegisterRequest, TokenResponse
 from app.modules.domain.models import Company, CompanyRole, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+DUMMY_PASSWORD_HASH = hash_password("not-a-real-account-password")
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, session: SessionDep) -> TokenResponse:
     email = payload.email.lower()
+    await enforce_rate_limit("register-email", email, 3, 3600)
     if await session.scalar(select(User.id).where(User.email == email)) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
@@ -25,11 +30,15 @@ async def register(payload: RegisterRequest, session: SessionDep) -> TokenRespon
         company_id=company.id,
         email=email,
         full_name=payload.full_name,
-        password_hash=hash_password(payload.password),
+        password_hash=await to_thread.run_sync(hash_password, payload.password),
         company_role=CompanyRole.OWNER,
     )
     session.add(user)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Email already registered") from None
     return TokenResponse(access_token=create_access_token(user.id))
 
 
@@ -37,8 +46,14 @@ async def register(payload: RegisterRequest, session: SessionDep) -> TokenRespon
 async def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep
 ) -> TokenResponse:
+    if len(form.username) > 320 or len(form.password) > 128:
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    await enforce_rate_limit("login-email", form.username.lower(), 12, 300)
     user = await session.scalar(select(User).where(User.email == form.username.lower()))
-    if user is None or not user.is_active or not verify_password(form.password, user.password_hash):
+    # Match the password work for nonexistent and inactive accounts.
+    encoded = user.password_hash if user else DUMMY_PASSWORD_HASH
+    valid = await to_thread.run_sync(verify_password, form.password, encoded)
+    if user is None or not user.is_active or not valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
