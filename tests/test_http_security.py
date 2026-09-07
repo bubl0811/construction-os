@@ -276,3 +276,30 @@ def test_public_deployments_do_not_expose_schema(monkeypatch):
     monkeypatch.setattr(get_settings(), "environment", "production")
     app = create_app()
     assert app.docs_url is None and app.redoc_url is None and app.openapi_url is None
+
+
+async def test_project_delete_requires_owner_confirmation_and_cascades(client):
+    http, users, projects, docs, _ = client
+    path = f"/api/v1/projects/{projects[0].id}"
+    body = {"confirmation_code": "TEST"}
+    assert (await http.request("DELETE", path, json=body)).status_code == 401
+    assert (
+        await http.request("DELETE", path, json=body, headers=authorization(users[1]))
+    ).status_code == 404
+    assert (
+        await http.request("DELETE", path, json=body, headers=authorization(users[2]))
+    ).status_code == 403
+    assert (
+        await http.request(
+            "DELETE", path, json={"confirmation_code": "WRONG"}, headers=authorization(users[0])
+        )
+    ).status_code == 422
+    assert (await http.get(path, headers=authorization(users[0]))).status_code == 200
+    assert (
+        await http.request("DELETE", path, json=body, headers=authorization(users[0]))
+    ).status_code == 204
+    assert (await http.get(path, headers=authorization(users[0]))).status_code == 404
+    assert (await http.get(path + "/documents", headers=authorization(users[0]))).status_code == 404
+    assert (
+        await http.get(f"/api/v1/projects/{projects[1].id}", headers=authorization(users[1]))
+    ).status_code == 200
