@@ -1,12 +1,14 @@
+import logging
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
 
 import jwt
 from anyio import to_thread
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 
 from app.core.config import get_settings
 from app.core.security import create_document_upload_token, decode_document_upload_token
@@ -192,3 +194,43 @@ async def download_document(
             detail="Document file is missing from storage",
         )
     return FileResponse(path=Path(path), media_type=document.mime_type, filename=document.name)
+
+
+class DocumentDeleteRequest(BaseModel):
+    confirm: bool
+
+
+@router.delete("/{document_id}", status_code=204)
+async def delete_document(
+    project_id: UUID,
+    document_id: UUID,
+    payload: DocumentDeleteRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Response:
+    await require_project_permission(
+        session, current_user, project_id, ProjectPermission.MANAGE_DOCUMENTS
+    )
+    if payload.confirm is not True:
+        raise HTTPException(status_code=422, detail="Document deletion must be confirmed")
+    document = await get_project_document(session, project_id, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    path = document_storage_file(get_settings().document_storage_path, document.storage_key)
+    session.add(
+        AuditEvent(
+            project_id=project_id,
+            actor_id=current_user.id,
+            entity_type="document",
+            entity_id=document.id,
+            action="deleted",
+            old_value={"name": document.name, "sha256": document.sha256},
+        )
+    )
+    await session.delete(document)
+    await session.commit()
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logging.getLogger(__name__).exception("Deleted document has a file pending cleanup")
+    return Response(status_code=204)

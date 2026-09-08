@@ -9,7 +9,11 @@ from app.core.config import get_settings
 from app.modules.auth.dependencies import CurrentUser, SessionDep
 from app.modules.documents.service import document_storage_file
 from app.modules.domain.models import AuditEvent, Document, Project, ProjectMember, ProjectRole
-from app.modules.projects.access import ProjectPermission, require_project_permission
+from app.modules.projects.access import (
+    ProjectPermission,
+    require_project_permission,
+    role_has_permission,
+)
 from app.modules.projects.schemas import ProjectCreate, ProjectResponse
 from app.modules.projects.service import accessible_projects_query, get_accessible_project
 
@@ -78,7 +82,12 @@ async def project_permissions(
     project_id: UUID, session: SessionDep, current_user: CurrentUser
 ) -> dict[str, bool]:
     access = await require_project_permission(session, current_user, project_id)
-    return {"can_delete": access.membership.role == ProjectRole.OWNER}
+    return {
+        "can_delete": access.membership.role == ProjectRole.OWNER,
+        "can_delete_documents": role_has_permission(
+            access.membership.role, ProjectPermission.MANAGE_DOCUMENTS
+        ),
+    }
 
 
 @router.delete("/{project_id}", status_code=204)
