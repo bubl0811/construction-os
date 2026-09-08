@@ -303,3 +303,27 @@ async def test_project_delete_requires_owner_confirmation_and_cascades(client):
     assert (
         await http.get(f"/api/v1/projects/{projects[1].id}", headers=authorization(users[1]))
     ).status_code == 200
+
+
+async def test_document_deletion_is_scoped_and_confirmed(client):
+    http, users, projects, docs, _ = client
+    base = f"/api/v1/projects/{projects[0].id}"
+    route = f"{base}/documents/{docs[0].id}"
+    for actor, code in [(None, 401), (users[1], 404), (users[2], 403)]:
+        headers = authorization(actor) if actor else {}
+        result = await http.request("DELETE", route, headers=headers, json={"confirm": True})
+        assert result.status_code == code
+    result = await http.request(
+        "DELETE", route, headers=authorization(users[0]), json={"confirm": False}
+    )
+    assert result.status_code == 422
+    result = await http.request(
+        "DELETE", route, headers=authorization(users[0]), json={"confirm": True}
+    )
+    assert result.status_code == 204
+    assert (await http.get(route + "/download", headers=authorization(users[0]))).status_code == 404
+    assert (await http.get(base, headers=authorization(users[0]))).status_code == 200
+    foreign = await http.get(
+        f"/api/v1/projects/{projects[1].id}/documents", headers=authorization(users[1])
+    )
+    assert len(foreign.json()) == 1
