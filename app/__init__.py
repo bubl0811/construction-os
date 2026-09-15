@@ -1,1 +1,0 @@
-"""Construction OS application package."""
