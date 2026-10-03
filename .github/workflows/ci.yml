@@ -16,6 +16,21 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: construction_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      CONSTRUCTION_OS_SECRET_KEY: ci-test-secret-key-that-is-at-least-32-chars
+      CONSTRUCTION_OS_DATABASE_URL: postgresql+asyncpg://test:ci-only-password@localhost:5432/construction_test
+      CONSTRUCTION_OS_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,9 +44,16 @@ jobs:
       - run: ruff format --check .
       - run: mypy app
       - run: pytest
+      - name: Validate PostgreSQL migrations and schema
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade 20260828_02
+          alembic upgrade head
+          alembic check
       - name: Validate staging deployment files
         run: |
-          bash -n scripts/deploy.sh
+          bash -n scripts/deploy.sh scripts/backup.sh scripts/verify-restore.sh
           cp .env.example .env
           CONSTRUCTION_OS_POSTGRES_DB=construction \
           CONSTRUCTION_OS_POSTGRES_USER=construction \

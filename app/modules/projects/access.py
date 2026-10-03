@@ -14,6 +14,7 @@ class ProjectPermission(StrEnum):
     MANAGE_MEMBERS = "manage_members"
     MANAGE_STRUCTURES = "manage_structures"
     MANAGE_DOCUMENTS = "manage_documents"
+    APPROVE_DOCUMENTS = "approve_documents"
     MANAGE_CALCULATIONS = "manage_calculations"
 
 
@@ -24,6 +25,7 @@ ROLE_PERMISSIONS: dict[ProjectRole, frozenset[ProjectPermission]] = {
         {
             ProjectPermission.READ,
             ProjectPermission.MANAGE_STRUCTURES,
+            ProjectPermission.APPROVE_DOCUMENTS,
             ProjectPermission.MANAGE_DOCUMENTS,
             ProjectPermission.MANAGE_CALCULATIONS,
         }
@@ -32,6 +34,7 @@ ROLE_PERMISSIONS: dict[ProjectRole, frozenset[ProjectPermission]] = {
         {
             ProjectPermission.READ,
             ProjectPermission.MANAGE_STRUCTURES,
+            ProjectPermission.APPROVE_DOCUMENTS,
             ProjectPermission.MANAGE_DOCUMENTS,
             ProjectPermission.MANAGE_CALCULATIONS,
         }
@@ -66,7 +69,7 @@ async def require_project_permission(
     permission: ProjectPermission = ProjectPermission.READ,
 ) -> ProjectAccess:
     # Serialize membership changes before reading the actor's role and owner count.
-    if permission == ProjectPermission.MANAGE_MEMBERS:
+    if permission in {ProjectPermission.MANAGE_MEMBERS, ProjectPermission.APPROVE_DOCUMENTS}:
         await session.execute(
             select(Project.id)
             .where(Project.id == project_id, Project.company_id == user.company_id)

@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.lock \
 
 COPY alembic.ini ./
 COPY migrations ./migrations
+COPY scripts ./scripts
 
 RUN useradd --system --uid 10001 --user-group appuser \
     && mkdir -p /var/lib/construction-os/documents \

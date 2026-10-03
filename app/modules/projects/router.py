@@ -83,6 +83,12 @@ async def project_permissions(
 ) -> dict[str, bool]:
     access = await require_project_permission(session, current_user, project_id)
     return {
+        "can_manage_members": role_has_permission(
+            access.membership.role, ProjectPermission.MANAGE_MEMBERS
+        ),
+        "can_approve_documents": role_has_permission(
+            access.membership.role, ProjectPermission.APPROVE_DOCUMENTS
+        ),
         "can_delete": access.membership.role == ProjectRole.OWNER,
         "can_delete_documents": role_has_permission(
             access.membership.role, ProjectPermission.MANAGE_DOCUMENTS

@@ -33,7 +33,14 @@ def calculate_concrete_pour(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[s
     except ValidationError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=error.errors(include_input=False, include_context=False),
+            detail={
+                "missing_inputs": [
+                    ".".join(map(str, item["loc"]))
+                    for item in error.errors()
+                    if item["type"] == "missing"
+                ],
+                "errors": error.errors(include_input=False, include_context=False),
+            },
         ) from error
     geometric_volume_m3 = data.length_m * data.height_m * data.thickness_m
     gross_m3 = data.specified_gross_volume_m3 or geometric_volume_m3
@@ -55,6 +62,7 @@ def calculate_concrete_pour(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[s
         else "Vзамовлення = (L × H × t − Vпрорізів − Vзакладних − Vарматури) × (1 + запас/100)"
     )
     result = {
+        "unit": "m3",
         "gross_volume_m3": _round(gross_m3),
         "geometric_volume_m3": _round(geometric_volume_m3),
         "volume_basis": (
@@ -80,7 +88,14 @@ def calculate_project_rebar_schedule(
     except ValidationError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=error.errors(include_input=False, include_context=False),
+            detail={
+                "missing_inputs": [
+                    ".".join(map(str, item["loc"]))
+                    for item in error.errors()
+                    if item["type"] == "missing"
+                ],
+                "errors": error.errors(include_input=False, include_context=False),
+            },
         ) from error
     calculated_mass_kg = sum(item.mass_kg for item in data.items)
     difference_kg = calculated_mass_kg - data.declared_total_mass_kg
@@ -91,6 +106,8 @@ def calculate_project_rebar_schedule(
         "calculated_items_mass_kg": _round(calculated_mass_kg, 2),
         "declared_total_mass_kg": _round(data.declared_total_mass_kg, 2),
         "rounding_difference_kg": _round(difference_kg, 2),
+        "requires_review": abs(difference_kg) > max(0.1, len(data.items) * 0.005),
+        "unit": "kg",
         "total_mass_kg": _round(data.declared_total_mass_kg, 2),
         "formula": (
             "Проєктна маса за специфікацією та відомістю витрат сталі; "
@@ -110,7 +127,14 @@ def calculate_wall_rebar(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[str,
     except ValidationError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=error.errors(include_input=False, include_context=False),
+            detail={
+                "missing_inputs": [
+                    ".".join(map(str, item["loc"]))
+                    for item in error.errors()
+                    if item["type"] == "missing"
+                ],
+                "errors": error.errors(include_input=False, include_context=False),
+            },
         ) from error
 
     vertical_count_per_layer = math.ceil(data.wall_length_m * 1000 / data.vertical_spacing_mm) + 1
