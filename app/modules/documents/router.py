@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFil
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.security import create_document_upload_token, decode_document_upload_token
@@ -22,7 +23,7 @@ from app.modules.documents.service import (
     project_documents_query,
     safe_document_name,
 )
-from app.modules.domain.models import AuditEvent, Document, DocumentPage, User
+from app.modules.domain.models import AuditEvent, Document, DocumentPage, SheetRevision, User
 from app.modules.projects.access import ProjectPermission, require_project_permission
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
@@ -216,6 +217,16 @@ async def delete_document(
     document = await get_project_document(session, project_id, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
+    registered = await session.scalar(
+        select(SheetRevision.id).where(
+            SheetRevision.document_id == document_id,
+            SheetRevision.status.in_(["current", "archived"]),
+        )
+    )
+    if registered is not None:
+        raise HTTPException(
+            status_code=409, detail="Approved drawing revisions must remain in the archive"
+        )
     path = document_storage_file(get_settings().document_storage_path, document.storage_key)
     session.add(
         AuditEvent(

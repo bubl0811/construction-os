@@ -19,8 +19,16 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    Base.metadata.create_all(bind=op.get_bind(), checkfirst=False)
+    Base.metadata.create_all(
+        bind=op.get_bind(),
+        checkfirst=False,
+        tables=[table for name, table in Base.metadata.tables.items() if name != "sheet_revisions"],
+    )
 
 
 def downgrade() -> None:
-    Base.metadata.drop_all(bind=op.get_bind(), checkfirst=False)
+    Base.metadata.drop_all(
+        bind=op.get_bind(),
+        checkfirst=False,
+        tables=[table for name, table in Base.metadata.tables.items() if name != "sheet_revisions"],
+    )

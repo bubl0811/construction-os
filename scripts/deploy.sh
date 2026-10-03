@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 readonly APP_DIR="${CONSTRUCTION_OS_DEPLOY_DIR:-/opt/construction-os}"
 readonly COMPOSE_FILE="compose.staging.yaml"
-readonly PUBLIC_HEALTH_URL="https://185-143-145-25.sslip.io/api/v1/health"
+readonly PUBLIC_HEALTH_URL="https://185-143-145-25.sslip.io/api/v1/health/ready"
 
 ensure_server_dependencies() {
   if command -v docker >/dev/null 2>&1 \
@@ -104,6 +104,12 @@ fi
 
 chmod 600 .env
 
+if [[ -n "$(docker compose -f "${COMPOSE_FILE}" ps -q db)" ]]; then
+  export CONSTRUCTION_OS_BACKUP_DIR="${CONSTRUCTION_OS_BACKUP_DIR:-/var/backups/construction-os}"
+  snapshot="$(bash scripts/backup.sh)"
+  bash scripts/verify-restore.sh "${snapshot}"
+fi
+
 docker compose -f "${COMPOSE_FILE}" build --pull api
 # Existing volumes were created by the former root process. Preserve files and
 # grant the new dedicated runtime user access before starting the new image.
@@ -117,7 +123,7 @@ api_is_healthy=false
 for _ in $(seq 1 18); do
   if docker compose -f "${COMPOSE_FILE}" exec -T api \
     python -c \
-    "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"; then
+    "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=12)"; then
     api_is_healthy=true
     break
   fi
@@ -150,3 +156,4 @@ docker compose -f "${COMPOSE_FILE}" ps
 docker compose -f "${COMPOSE_FILE}" logs --tail=100 caddy
 echo "Construction OS HTTPS endpoint did not become healthy in time." >&2
 exit 1
+

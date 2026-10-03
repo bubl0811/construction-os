@@ -327,3 +327,237 @@ async def test_document_deletion_is_scoped_and_confirmed(client):
         f"/api/v1/projects/{projects[1].id}/documents", headers=authorization(users[1])
     )
     assert len(foreign.json()) == 1
+
+
+async def test_sheet_revision_approval_archives_previous_and_isolates_tenants(client):
+    http, users, projects, docs, _ = client
+    base = f"/api/v1/projects/{projects[0].id}/documents"
+    headers = authorization(users[0])
+    payload = {"page_number": 1, "drawing_code": "КЖ-14", "revision": "01"}
+    denied = await http.post(
+        f"{base}/{docs[0].id}/sheets", json=payload, headers=authorization(users[1])
+    )
+    assert denied.status_code == 404
+    first = await http.post(f"{base}/{docs[0].id}/sheets", json=payload, headers=headers)
+    assert first.status_code == 201
+    first_id = first.json()["id"]
+    viewer = await http.post(
+        f"{base}/sheets/{first_id}/approve", json={}, headers=authorization(users[2])
+    )
+    assert viewer.status_code == 403
+    assert (await http.post(f"{base}/sheets/{first_id}/approve", json={}, headers=headers)).json()[
+        "status"
+    ] == "current"
+    calculation_payload = {
+        "title": "Revision check",
+        "calculation_type": "concrete_pour",
+        "input_data": {"length_m": 2, "height_m": 3, "thickness_m": 0.2},
+        "sources": [{"document_id": str(docs[0].id), "page": 1}],
+    }
+    calculation_url = f"/api/v1/projects/{projects[0].id}/calculations"
+    calculation = await http.post(calculation_url, json=calculation_payload, headers=headers)
+    assert calculation.status_code == 201
+    assert calculation.json()["sources"][0]["sheet_revision_id"] == first_id
+    upload = await http.post(
+        base, headers=headers, files={"file": ("rev02.pdf", make_pdf(), "application/pdf")}
+    )
+    assert upload.status_code == 201
+    new_doc = upload.json()["id"]
+    second = await http.post(
+        f"{base}/{new_doc}/sheets", json={**payload, "revision": "02"}, headers=headers
+    )
+    assert second.status_code == 201
+    assert (
+        await http.post(f"{base}/sheets/{second.json()['id']}/approve", json={}, headers=headers)
+    ).status_code == 200
+    rows = (await http.get(f"{base}/sheets", headers=headers)).json()
+    assert sorted(row["status"] for row in rows) == ["archived", "current"]
+    assert (
+        await http.post(calculation_url, json=calculation_payload, headers=headers)
+    ).status_code == 409
+    assert (
+        await http.patch(
+            f"{calculation_url}/{calculation.json()['id']}/status",
+            json={"status": "checked"},
+            headers=headers,
+        )
+    ).status_code == 409
+    assert (
+        await http.post(f"{base}/sheets/{first_id}/approve", json={}, headers=headers)
+    ).status_code == 409
+    assert (
+        await http.request(
+            "DELETE", f"{base}/{docs[0].id}", json={"confirm": True}, headers=headers
+        )
+    ).status_code == 409
+    assert (await http.get(f"{base}/sheets", headers=authorization(users[1]))).status_code == 404
+
+
+async def test_calculation_snapshots_hash_and_rejects_archived_or_missing_sources(client):
+    http, users, projects, docs, _ = client
+    base = f"/api/v1/projects/{projects[0].id}"
+    headers = authorization(users[0])
+    payload = {
+        "title": "Wall",
+        "calculation_type": "concrete_pour",
+        "input_data": {"length_m": 2, "height_m": 3, "thickness_m": 0.2},
+        "sources": [
+            {"document_id": str(docs[0].id), "page": 1, "document_name": "untrusted-name.pdf"}
+        ],
+    }
+    result = await http.post(f"{base}/calculations", json=payload, headers=headers)
+    assert result.status_code == 201
+    assert result.json()["sources"][0]["sha256"] == "a" * 64
+    assert result.json()["sources"][0]["document_name"] == "drawing.pdf"
+    assert result.json()["sources"][0]["source_type"] == "DOCUMENT"
+    missing = await http.post(
+        f"{base}/calculations", json={**payload, "input_data": {}}, headers=headers
+    )
+    assert missing.status_code == 422
+    assert set(missing.json()["detail"]["missing_inputs"]) == {
+        "length_m",
+        "height_m",
+        "thickness_m",
+    }
+
+
+async def test_company_account_can_join_own_project_without_replacing_actor(client):
+    http, users, projects, _, _ = client
+    headers = authorization(users[0])
+    payload = {
+        "email": "new-colleague@example.com",
+        "full_name": "Colleague",
+        "password": "new-colleague-password-123",
+    }
+    account = await http.post("/api/v1/company/users", json=payload, headers=headers)
+    assert account.status_code == 201
+    assert account.json()["company_id"] == str(users[0].company_id)
+    assert "access_token" not in account.json()
+    own = f"/api/v1/projects/{projects[0].id}/members"
+    member = await http.post(
+        own, json={"email": payload["email"], "role": "engineer"}, headers=headers
+    )
+    assert member.status_code == 201
+    foreign = await http.post(
+        f"/api/v1/projects/{projects[1].id}/members",
+        json={"email": payload["email"], "role": "engineer"},
+        headers=authorization(users[1]),
+    )
+    assert foreign.status_code == 404
+
+
+async def test_ready_checks_database_cache_and_storage(client):
+    http, _, _, _, redis = client
+    result = await http.get("/api/v1/health/ready")
+    assert result.status_code == 200
+    assert result.json()["checks"] == {"database": "ok", "redis": "ok", "storage": "ok"}
+
+
+def make_pdf():
+    writer = PdfWriter()
+    writer.add_blank_page(width=595, height=842)
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+async def test_twenty_complete_client_paths(client):
+    http, _, _, _, _ = client
+    for run in range(20):
+        registration = await http.post(
+            "/api/v1/auth/register",
+            json={
+                "company_name": f"Construction Company {run}",
+                "full_name": "Project Owner",
+                "email": f"workflow-{run}@example.com",
+                "password": "a-workflow-password-123",
+            },
+        )
+        assert registration.status_code == 201, registration.text
+        token = registration.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        project = await http.post(
+            "/api/v1/projects", headers=headers, json={"name": "Test Object", "code": f"TEST-{run}"}
+        )
+        assert project.status_code == 201, project.text
+        base = f"/api/v1/projects/{project.json()['id']}"
+        pdf = await http.post(
+            base + "/documents",
+            headers=headers,
+            files={"file": ("drawing.pdf", make_pdf(), "application/pdf")},
+        )
+        assert pdf.status_code == 201, pdf.text
+        doc_id = pdf.json()["id"]
+        structure = await http.post(
+            base + "/structures",
+            headers=headers,
+            json={"name": "К1-33", "structure_type": "column"},
+        )
+        assert structure.status_code == 201, structure.text
+        revision = await http.post(
+            base + f"/documents/{doc_id}/sheets",
+            headers=headers,
+            json={"page_number": 1, "drawing_code": "КЖ-1", "revision": "01"},
+        )
+        assert revision.status_code == 201, revision.text
+        assert (
+            await http.post(
+                base + f"/documents/sheets/{revision.json()['id']}/approve",
+                json={},
+                headers=headers,
+            )
+        ).status_code == 200
+        calculation = await http.post(
+            base + "/calculations",
+            headers=headers,
+            json={
+                "title": "Column volume",
+                "structure_id": structure.json()["id"],
+                "calculation_type": "concrete_pour",
+                "input_data": {
+                    "length_m": 0.4,
+                    "height_m": 3.1,
+                    "thickness_m": 0.4,
+                    "reserve_percent": 0,
+                },
+                "sources": [{"document_id": doc_id, "page": 1}],
+            },
+        )
+        assert calculation.status_code == 201, calculation.text
+        assert calculation.json()["result"]["net_volume_m3"] == 0.496
+        assert calculation.json()["sources"][0]["sha256"] == pdf.json()["sha256"]
+        calc_id = calculation.json()["id"]
+        for status in ["checked", "approved"]:
+            assert (
+                await http.patch(
+                    base + f"/calculations/{calc_id}/status",
+                    headers=headers,
+                    json={"status": status},
+                )
+            ).status_code == 200
+        colleague = f"colleague-{run}@example.com"
+        account = await http.post(
+            "/api/v1/company/users",
+            headers=headers,
+            json={
+                "email": colleague,
+                "full_name": "Engineer",
+                "password": "an-engineer-password-123",
+            },
+        )
+        assert account.status_code == 201, account.text
+        assert (
+            await http.post(
+                base + "/members", headers=headers, json={"email": colleague, "role": "engineer"}
+            )
+        ).status_code == 201
+        report = await http.get(base + "/reports/calculations.csv", headers=headers)
+        assert report.status_code == 200
+        assert "Column volume" in report.text
+        assert pdf.json()["sha256"] in report.text
+        assert (
+            await http.request(
+                "DELETE", base, headers=headers, json={"confirmation_code": f"TEST-{run}"}
+            )
+        ).status_code == 204
+        assert (await http.get(base, headers=headers)).status_code == 404

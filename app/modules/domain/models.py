@@ -1,8 +1,21 @@
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -187,3 +200,26 @@ class AuditEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin, ProjectOwnedMixin):
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     old_value: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     new_value: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+
+class SheetRevision(Base, UUIDPrimaryKeyMixin, TimestampMixin, ProjectOwnedMixin):
+    __tablename__ = "sheet_revisions"
+    document_id: Mapped[UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    drawing_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    revision: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False)
+    approved_by_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint("document_id", "page_number"),
+        UniqueConstraint("project_id", "drawing_code", "revision"),
+        Index(
+            "uq_sheet_revisions_current",
+            "project_id",
+            "drawing_code",
+            unique=True,
+            postgresql_where=text("status = 'current'"),
+            sqlite_where=text("status = 'current'"),
+        ),
+    )

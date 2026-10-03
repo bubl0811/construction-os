@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         env_file=".env", env_prefix="CONSTRUCTION_OS_", extra="ignore"
     )
 
-    app_name: str = "Construction OS"
+    app_name: str = "ЗВІДО"
     app_version: str = "0.1.0"
     api_prefix: str = "/api/v1"
     environment: Literal["local", "test", "staging", "production"] = "local"
