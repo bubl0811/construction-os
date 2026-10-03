@@ -348,6 +348,16 @@ async def test_sheet_revision_approval_archives_previous_and_isolates_tenants(cl
     assert (await http.post(f"{base}/sheets/{first_id}/approve", json={}, headers=headers)).json()[
         "status"
     ] == "current"
+    calculation_payload = {
+        "title": "Revision check",
+        "calculation_type": "concrete_pour",
+        "input_data": {"length_m": 2, "height_m": 3, "thickness_m": 0.2},
+        "sources": [{"document_id": str(docs[0].id), "page": 1}],
+    }
+    calculation_url = f"/api/v1/projects/{projects[0].id}/calculations"
+    calculation = await http.post(calculation_url, json=calculation_payload, headers=headers)
+    assert calculation.status_code == 201
+    assert calculation.json()["sources"][0]["sheet_revision_id"] == first_id
     upload = await http.post(
         base, headers=headers, files={"file": ("rev02.pdf", make_pdf(), "application/pdf")}
     )
@@ -362,6 +372,16 @@ async def test_sheet_revision_approval_archives_previous_and_isolates_tenants(cl
     ).status_code == 200
     rows = (await http.get(f"{base}/sheets", headers=headers)).json()
     assert sorted(row["status"] for row in rows) == ["archived", "current"]
+    assert (
+        await http.post(calculation_url, json=calculation_payload, headers=headers)
+    ).status_code == 409
+    assert (
+        await http.patch(
+            f"{calculation_url}/{calculation.json()['id']}/status",
+            json={"status": "checked"},
+            headers=headers,
+        )
+    ).status_code == 409
     assert (
         await http.post(f"{base}/sheets/{first_id}/approve", json={}, headers=headers)
     ).status_code == 409
