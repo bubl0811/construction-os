@@ -58,6 +58,9 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    auth_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     company_role: Mapped[CompanyRole] = mapped_column(
         Enum(CompanyRole, name="company_role"), default=CompanyRole.MEMBER, nullable=False
@@ -223,3 +226,12 @@ class SheetRevision(Base, UUIDPrimaryKeyMixin, TimestampMixin, ProjectOwnedMixin
             sqlite_where=text("status = 'current'"),
         ),
     )
+
+
+class AccountAuditEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "account_audit_events"
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id", ondelete="RESTRICT"))
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    old_value: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    new_value: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

@@ -28,10 +28,16 @@ def test_all_required_domain_tables_are_registered() -> None:
 
 
 def test_project_owned_tables_have_project_id() -> None:
-    exceptions = {"companies", "users", "projects"}
+    exceptions = {"companies", "users", "projects", "account_audit_events"}
     for table_name in set(Base.metadata.tables) - exceptions:
         assert "project_id" in Base.metadata.tables[table_name].columns
 
 
 def test_user_has_company_tenant_boundary() -> None:
     assert "company_id" in Base.metadata.tables["users"].columns
+
+
+def test_account_audit_events_are_tenant_scoped() -> None:
+    table = Base.metadata.tables["account_audit_events"]
+    assert "company_id" in table.columns
+    assert "actor_id" in table.columns

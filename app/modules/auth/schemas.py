@@ -25,3 +25,8 @@ class CurrentUserResponse(BaseModel):
     email: EmailStr
     full_name: str
     company_role: CompanyRole
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)

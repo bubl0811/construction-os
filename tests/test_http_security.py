@@ -561,3 +561,38 @@ async def test_twenty_complete_client_paths(client):
             )
         ).status_code == 204
         assert (await http.get(base, headers=headers)).status_code == 404
+
+
+async def test_password_change_verifies_current_password_and_revokes_sessions(client):
+    http, users, _, _, _ = client
+    headers = authorization(users[0])
+    path = "/api/v1/auth/change-password"
+    payload = {"current_password": "wrong", "new_password": "replacement-password-123"}
+    assert (await http.post(path, json=payload)).status_code == 401
+    assert (await http.post(path, json=payload, headers=headers)).status_code == 400
+    payload["current_password"] = "a-test-password-123"
+    payload["new_password"] = "short"
+    assert (await http.post(path, json=payload, headers=headers)).status_code == 422
+    payload["new_password"] = payload["current_password"]
+    assert (await http.post(path, json=payload, headers=headers)).status_code == 400
+    payload["new_password"] = "replacement-password-123"
+    response = await http.post(path, json=payload, headers=headers)
+    assert response.status_code == 200
+    assert (await http.get("/api/v1/auth/me", headers=headers)).status_code == 401
+    fresh = {"Authorization": f"Bearer {response.json()['access_token']}"}
+    assert (await http.get("/api/v1/auth/me", headers=fresh)).status_code == 200
+    assert (await http.get("/api/v1/auth/me", headers=authorization(users[1]))).status_code == 200
+    old_login = await http.post(
+        "/api/v1/auth/token", data={"username": users[0].email, "password": "a-test-password-123"}
+    )
+    assert old_login.status_code == 401
+    new_login = await http.post(
+        "/api/v1/auth/token", data={"username": users[0].email, "password": payload["new_password"]}
+    )
+    assert new_login.status_code == 200
+    assert (
+        await http.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {new_login.json()['access_token']}"},
+        )
+    ).status_code == 200

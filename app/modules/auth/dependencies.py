@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import decode_access_token
+from app.core.security import access_token_version, decode_access_token
 from app.db.session import get_db_session
 from app.modules.domain.models import User
 
@@ -23,10 +23,11 @@ async def get_current_user(
     )
     try:
         user_id = decode_access_token(token)
+        version = access_token_version(token)
     except (jwt.InvalidTokenError, ValueError):
         raise unauthorized from None
     user = await session.get(User, user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.auth_version != version:
         raise unauthorized
     return user
 
