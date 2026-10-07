@@ -88,9 +88,10 @@ async def change_password(
         update(User)
         .where(User.id == current_user.id, User.password_hash == old_hash)
         .values(password_hash=new_hash, auth_version=version)
+        .returning(User.id)
         .execution_options(synchronize_session=False)
     )
-    if changed.rowcount != 1:
+    if changed.scalar_one_or_none() is None:
         await session.rollback()
         raise HTTPException(status_code=409, detail="Password already changed; sign in again")
     session.add(
